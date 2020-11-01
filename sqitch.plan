@@ -1,0 +1,7 @@
+%syntax-version=1.0.0
+%project=pembayaran
+%uri=https://github.com/evilfactorylabs/pembayaran.git
+
+app/init 2020-10-27T20:37:01Z Fariz <fariz@evilfactory.id> # Initialize base project
+auth/init [app/init] 2020-10-27T21:05:55Z Fariz <fariz@evilfactory.id> # create initial auth schema
+auth/endpoint 2020-10-31T09:06:49Z Fariz <fariz@evilfactory.id> # create initial endpoint
