@@ -1,0 +1,6 @@
+db-uri = "postgres://postgres:mysecretpassword@localhost:5433/pembayaran"
+db-schema = "api"
+db-anon-role = "anon"
+
+# silahkan buat dengan perintah `tr -dc A-Za-z0-9 </dev/urandom | head -c32`
+jwt-secret = "change me"
