@@ -1,7 +1,8 @@
 -- Verify pembayaran:auth/init on pg
+begin;
 
-BEGIN;
+select
+from
+  auth.users;
 
-select from auth.users;
-
-ROLLBACK;
+rollback;

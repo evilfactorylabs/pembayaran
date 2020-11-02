@@ -1,8 +1,8 @@
 -- Revert pembayaran:auth/init from pg
-
-BEGIN;
+begin;
 
 drop table auth.users;
+
 drop schema auth cascade;
 
-COMMIT;
+commit;

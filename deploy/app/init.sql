@@ -1,73 +1,118 @@
 -- Deploy pembayaran:app/init to pg
-
-BEGIN;
+begin;
 
 create extension if not exists "pgcrypto";
+
 create extension if not exists "uuid-ossp";
 
 -- pgjwt extension, source: https://github.com/michelp/pgjwt
-CREATE OR REPLACE FUNCTION url_encode(data bytea) RETURNS text LANGUAGE sql AS $$
-    SELECT translate(encode(data, 'base64'), E'+/=\n', '-_');
+create or replace function url_encode (data bytea)
+  returns text
+  language sql
+  as $$
+  select
+    translate(encode(data, 'base64'), E'+/=\n', '-_');
+
 $$;
 
-CREATE OR REPLACE FUNCTION url_decode(data text) RETURNS bytea LANGUAGE sql AS $$
-WITH t AS (SELECT translate(data, '-_', '+/') AS trans),
-     rem AS (SELECT length(t.trans) % 4 AS remainder FROM t) -- compute padding size
-    SELECT decode(
-        t.trans ||
-        CASE WHEN rem.remainder > 0
-           THEN repeat('=', (4 - rem.remainder))
-           ELSE '' END,
-    'base64') FROM t, rem;
+create or replace function url_decode (data text)
+  returns bytea
+  language sql
+  as $$
+  with t as (
+    select
+      translate(data, '-_', '+/') as trans
+),
+rem as (
+  select
+    length(t.trans) % 4 as remainder
+  from
+    t) -- compute padding size
+  select
+    decode(t.trans || case when rem.remainder > 0 then
+        repeat('=', (4 - rem.remainder))
+      else
+        ''
+      end, 'base64')
+  from
+    t,
+    rem;
+
 $$;
 
-CREATE OR REPLACE FUNCTION algorithm_sign(signables text, secret text, algorithm text)
-RETURNS text LANGUAGE sql AS $$
-WITH
-  alg AS (
-    SELECT CASE
-      WHEN algorithm = 'HS256' THEN 'sha256'
-      WHEN algorithm = 'HS384' THEN 'sha384'
-      WHEN algorithm = 'HS512' THEN 'sha512'
-      ELSE '' END AS id)  -- hmac throws error
-SELECT url_encode(hmac(signables, secret, alg.id)) FROM alg;
+create or replace function algorithm_sign (signables text, secret text, algorithm text)
+  returns text
+  language sql
+  as $$
+  with alg as (
+    select
+      case when algorithm = 'HS256' then
+        'sha256'
+      when algorithm = 'HS384' then
+        'sha384'
+      when algorithm = 'HS512' then
+        'sha512'
+      else
+        ''
+      end as id) -- hmac throws error
+    select
+      url_encode (hmac(signables, secret, alg.id))
+    from
+      alg;
+
 $$;
 
-CREATE OR REPLACE FUNCTION sign(payload json, secret text, algorithm text DEFAULT 'HS256')
-RETURNS text LANGUAGE sql AS $$
-WITH
-  header AS (
-    SELECT url_encode(convert_to('{"alg":"' || algorithm || '","typ":"JWT"}', 'utf8')) AS data
-    ),
-  payload AS (
-    SELECT url_encode(convert_to(payload::text, 'utf8')) AS data
-    ),
-  signables AS (
-    SELECT header.data || '.' || payload.data AS data FROM header, payload
-    )
-SELECT
-    signables.data || '.' ||
-    algorithm_sign(signables.data, secret, algorithm) FROM signables;
+create or replace function sign (payload json, secret text, algorithm text default 'HS256')
+  returns text
+  language sql
+  as $$
+  with header as (
+    select
+      url_encode (convert_to('{"alg":"' || algorithm || '","typ":"JWT"}', 'utf8')) as data
+),
+payload as (
+  select
+    url_encode (convert_to(payload::text, 'utf8')) as data
+),
+signables as (
+  select
+    header.data || '.' || payload.data as data
+  from
+    header,
+    payload
+)
+select
+  signables.data || '.' || algorithm_sign (signables.data, secret, algorithm)
+from
+  signables;
+
 $$;
 
-CREATE OR REPLACE FUNCTION verify(token text, secret text, algorithm text DEFAULT 'HS256')
-RETURNS table(header json, payload json, valid boolean) LANGUAGE sql AS $$
-  SELECT
-    convert_from(url_decode(r[1]), 'utf8')::json AS header,
-    convert_from(url_decode(r[2]), 'utf8')::json AS payload,
-    r[3] = algorithm_sign(r[1] || '.' || r[2], secret, algorithm) AS valid
-  FROM regexp_split_to_array(token, '\.') r;
+create or replace function verify (token text, secret text, algorithm text default 'HS256')
+  returns table (
+    header json,
+    payload json,
+    valid boolean)
+  language sql
+  as $$
+  select
+    convert_from(url_decode (r[1]), 'utf8')::json as header,
+    convert_from(url_decode (r[2]), 'utf8')::json as payload,
+    r[3] = algorithm_sign (r[1] || '.' || r[2], secret, algorithm) as valid
+  from
+    regexp_split_to_array(token, '\.') r;
+
 $$;
 
 -- end pgjwt extension
-
 create schema api;
 
 create role anon nologin;
+
 grant usage on schema api to anon;
 
 create role authenticator noinherit nologin;
 
 grant anon to authenticator;
 
-COMMIT;
+commit;
